@@ -25,33 +25,56 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: setup Python
+        with:
+          fetch-depth: 0  # Получить всю историю коммитов
+
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-      - name: Install Firefox
+
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y firefox
+          sudo apt-get install -y firefox xvfb libdbus-glib-1-2
+
       - name: Install Geckodriver
         run: |
-          wget https://github.com/mozilla/geckodriver/releases/download/v0.30.0/geckodriver-v0.30.0-linux64.tar.gz
+          wget https://github.com/mozilla/geckodriver/releases/download/v0.34.0/geckodriver-v0.34.0-linux64.tar.gz
           tar -xvzf geckodriver*
           chmod +x geckodriver
           sudo mv geckodriver /usr/local/bin/
-      - name: install dependencies
-        run: pip install -r requirements.txt
-      - name: test_create_customer
+          geckodriver --version
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest allure-pytest
+
+      - name: Verify test files exist
+        run: |
+          ls -la Test/
+          [ -f "Test/Test_add_customer.py" ] || { echo "Test file not found!"; exit 1; }
+
+      - name: Run test_create_customer
         if: "github.event.inputs.deployment_target == 'test_create_customer'"
-        run: pytest Test/Test_add_customer.py::test_create_customer --alluredir=allure-results
-      - name: test_sort_customer
+        run: |
+          xvfb-run -a pytest Test/Test_add_customer.py::test_create_customer --alluredir=allure-results -v
+
+      - name: Run test_sort_customer
         if: "github.event.inputs.deployment_target == 'test_sort_customer'"
-        run: pytest Test/Test_sort_customer.py::test_sort_by_first_name --alluredir=allure-results
-      - name: test_delete
+        run: |
+          xvfb-run -a pytest Test/Test_sort_customer.py::test_sort_by_first_name --alluredir=allure-results -v
+
+      - name: Run test_delete
         if: "github.event.inputs.deployment_target == 'test_delete'"
-        run: pytest Test/Test_delete.py::test_delete --alluredir=allure-results
-      - name: Store results
+        run: |
+          xvfb-run -a pytest Test/Test_delete.py::test_delete --alluredir=allure-results -v
+
+      - name: Upload test results
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: allure-results
           path: allure-results
@@ -66,11 +89,25 @@ jobs:
         with:
           distribution: 'microsoft'
           java-version: '17'
-      - run: sudo wget https://github.com/allure-framework/allure2/releases/download/2.29.0/allure-2.29.0.tgz && sudo tar -zxvf allure-2.29.0.tgz -C /opt/ && sudo ln -s /opt/allure-2.29.0/bin/allure /usr/bin/allure
-      - name: Download all workflow run artifacts
+
+      - name: Install Allure
+        run: |
+          sudo wget https://github.com/allure-framework/allure2/releases/download/2.29.0/allure-2.29.0.tgz
+          sudo tar -zxvf allure-2.29.0.tgz -C /opt/
+          sudo ln -s /opt/allure-2.29.0/bin/allure /usr/bin/allure
+          allure --version
+
+      - name: Download test results
         uses: actions/download-artifact@v4
-      - run: allure generate -c allure-results -o _site
-      - name: Store generated report
+        with:
+          name: allure-results
+          path: allure-results
+
+      - name: Generate Allure report
+        run: |
+          allure generate -c allure-results -o _site
+
+      - name: Upload report artifact
         uses: actions/upload-artifact@v4
         with:
           name: _site
@@ -82,10 +119,17 @@ jobs:
     needs: generate-report
     name: Report publication
     steps:
-      - name: Download all workflow run artifacts
+      - name: Download report artifact
         uses: actions/download-artifact@v4
+        with:
+          name: _site
+          path: _site
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
