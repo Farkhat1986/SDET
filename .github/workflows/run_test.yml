@@ -11,7 +11,7 @@ on:
         options:
           - test_create_customer
           - test_sort_customer
-          - test_delete_customer
+          - test_delete
 
 permissions:
   contents: read
