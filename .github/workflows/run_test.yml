@@ -21,7 +21,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10  # Увеличиваем общий таймаут для job
+    timeout-minutes: 15  # Увеличиваем общий таймаут
 
     steps:
       - name: Checkout repository
@@ -35,7 +35,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y firefox xvfb
+          sudo apt-get install -y firefox xvfb libdbus-glib-1-2
           echo "Firefox version: $(firefox --version)"
 
       - name: Install latest Geckodriver
@@ -51,35 +51,32 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install webdriver-manager  # Явная установка на случай отсутствия в requirements.txt
+          pip install webdriver-manager selenium==4.30.0
 
-      - name: Run Xvfb (X virtual framebuffer)
-        run: Xvfb :99 -screen 0 1920x1080x24 &> /dev/null &
+      - name: Start Xvfb
+        run: |
+          Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &> /dev/null &
+          echo "DISPLAY=:99" >> $GITHUB_ENV
+
+      - name: Run tests with increased timeout
         env:
           DISPLAY: ":99"
-
-      - name: Wait for services to start
-        run: sleep 5  # Даем время для инициализации сервисов
-
-      - name: Run create customer test
-        if: github.event.inputs.deployment_target == 'test_create_customer'
+          SELENIUM_TIMEOUT: 300
         run: |
-          export DISPLAY=:99
-          pytest test/test_add_customer.py::test_create_customer --alluredir=allure-results
-
-      - name: Run sort customer test
-        if: github.event.inputs.deployment_target == 'test_sort_customer'
-        run: |
-          export DISPLAY=:99
-          pytest test/test_sort_customer.py::test_sort_by_first_name --alluredir=allure-results
-
-      - name: Run delete customer test
-        if: github.event.inputs.deployment_target == 'test_delete_customer'
-        run: |
-          export DISPLAY=:99
-          pytest test/test_wdelete.py::test_delete --alluredir=allure-results
+          case "${{ github.event.inputs.deployment_target }}" in
+            test_create_customer)
+              pytest test/test_add_customer.py::test_create_customer --alluredir=allure-results
+              ;;
+            test_sort_customer)
+              pytest test/test_sort_customer.py::test_sort_by_first_name --alluredir=allure-results
+              ;;
+            test_delete_customer)
+              pytest test/test_wdelete.py::test_delete --alluredir=allure-results
+              ;;
+          esac
 
       - name: Store test results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: allure-results
@@ -89,6 +86,7 @@ jobs:
   generate-report:
     runs-on: ubuntu-latest
     needs: test
+    if: always()
     name: Generate Allure report
     steps:
       - uses: actions/setup-java@v4
@@ -98,7 +96,7 @@ jobs:
 
       - name: Install Allure
         run: |
-          sudo wget https://github.com/allure-framework/allure2/releases/download/2.29.0/allure-2.29.0.tgz
+          sudo wget -q https://github.com/allure-framework/allure2/releases/download/2.29.0/allure-2.29.0.tgz
           sudo tar -zxvf allure-2.29.0.tgz -C /opt/
           sudo ln -s /opt/allure-2.29.0/bin/allure /usr/bin/allure
 
@@ -121,6 +119,7 @@ jobs:
   publish-report:
     runs-on: ubuntu-latest
     needs: generate-report
+    if: always()
     name: Publish report to GitHub Pages
     steps:
       - name: Download report artifact

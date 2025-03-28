@@ -7,21 +7,26 @@ from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver import Firefox
 from selenium.webdriver.firefox.service import Service as FirefoxService
 
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service
+from webdriver_manager.firefox import GeckoDriverManager
+
 
 @pytest.fixture(scope='module')
-def driver() -> WebDriver:
-    """Фикстура для инициализации WebDrivers.
+def driver():
+    options = Options()
+    options.add_argument("--width=1920")
+    options.add_argument("--height=1080")
+    options.add_argument("--headless")
 
-    Returns:
-        WebDriver: Экземпляр WebDriver для управления браузером.
-    """
+    service = Service(
+        GeckoDriverManager().install(),
+        service_args=['--log', 'debug'],
+        timeout=300  # Увеличенный таймаут
+    )
 
-    firefox_options = Options()
-    firefox_options.add_argument("--start-maximized")
-    firefox_options.add_argument('--headless')
-    service = FirefoxService(GeckoDriverManager().install())
-    driver = Firefox(service=service, options=firefox_options)
-
+    driver = webdriver.Firefox(service=service, options=options)
+    driver.set_page_load_timeout(60)
     yield driver
     driver.quit()
 
