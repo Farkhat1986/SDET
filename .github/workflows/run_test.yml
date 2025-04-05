@@ -30,7 +30,9 @@ jobs:
       - name: Install Chrome
         run: sudo apt-get install google-chrome-stable
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: | 
+          pip install -r requirements.txt
+          pip install webdriver_manager
       - name: Run test_create_customer
         run: pytest tests/test_add_customer.py::test_create_customer --alluredir=allure-results
       - name: Upload Allure results
@@ -53,7 +55,9 @@ jobs:
       - name: Install Chrome
         run: sudo apt-get install google-chrome-stable
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: | 
+          pip install -r requirements.txt
+          pip install webdriver_manager
       - name: Run test_sort_customer
         run: pytest tests/test_sort_customer.py::test_sort_by_first_name --alluredir=allure-results
       - name: Upload Allure results
